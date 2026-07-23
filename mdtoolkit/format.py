@@ -1,16 +1,49 @@
-"""format —— 规范化 Markdown 格式(成员3 模块)。
+import re
+from pathlib import Path
 
-待实现,见 Issue: format 子命令。
-预期功能:
-  - 标题 # 后确保恰好一个空格
-  - 无序列表统一用 "- "
-  - 折叠连续多个空行为最多一个
-  - 去除行尾多余空白
-  - -w 写回文件,否则打印结果
-"""
+_FENCE = re.compile(r"^\s*(```|~~~)")
+_HEADING = re.compile(r"^(#{1,6})\s*(.*?)\s*$")
+_ULIST = re.compile(r"^(\s*)[*+]\s+(.*)$")
+
+
+def normalize(text: str) -> str:
+    out, in_fence = [], False
+    for line in text.splitlines():
+        if _FENCE.match(line):
+            in_fence = not in_fence
+            out.append(line.rstrip())
+            continue
+        if in_fence:
+            out.append(line)
+            continue
+        m = _HEADING.match(line)
+        if m and line.lstrip().startswith("#"):
+            line = f"{m.group(1)} {m.group(2)}"
+        m = _ULIST.match(line)
+        if m:
+            line = f"{m.group(1)}- {m.group(2)}"
+        out.append(line.rstrip())
+    collapsed, blank = [], False
+    for line in out:
+        if line == "":
+            if blank:
+                continue
+            blank = True
+        else:
+            blank = False
+        collapsed.append(line)
+    return "\n".join(collapsed) + "\n"
 
 
 def run(args) -> int:
-    raise NotImplementedError(
-        "format 尚未实现。负责人:成员3。参见仓库 Issue。"
-    )
+    path = Path(args.file)
+    if not path.is_file():
+        print(f"错误:文件不存在 {path}")
+        return 1
+    result = normalize(path.read_text(encoding="utf-8"))
+    if args.write:
+        path.write_text(result, encoding="utf-8")
+        print(f"已格式化并写回 {path}")
+    else:
+        print(result, end="")
+    return 0
